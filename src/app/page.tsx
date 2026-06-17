@@ -1,17 +1,21 @@
-import { createClient } from "@/utils/supabase/server";
-import { cookies } from "next/headers";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export default async function Page() {
-  const cookieStore = await cookies();
-  const supabase = createClient(cookieStore);
+  const session = await getServerSession(authOptions);
 
-  const { data: todos } = await supabase.from("todos").select();
+  if (!session) {
+    redirect("/login");
+  }
 
-  return (
-    <ul>
-      {todos?.map((todo) => (
-        <li key={todo.id}>{todo.name}</li>
-      ))}
-    </ul>
-  );
+  // Redirect to appropriate dashboard based on role
+  if (session.user.role === "chef") {
+    redirect("/chef/dashboard");
+  } else if (session.user.role === "client") {
+    redirect("/client/dashboard");
+  }
+
+  // Fallback
+  redirect("/login");
 }
