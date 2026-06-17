@@ -1,26 +1,116 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafaf8;
+  --foreground: #1a1a1a;
+  --accent: #7c5c3a;
+  --accent-light: #c9a97a;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@font-face {
+  font-family: "Ingrid Darling";
+  src: url("/fonts/ingrid-darling/IngridDarling-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inria Serif";
+  src: url("/fonts/inria-serif/InriaSerif-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inria Serif";
+  src: url("/fonts/inria-serif/InriaSerif-Italic.ttf") format("truetype");
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inria Serif";
+  src: url("/fonts/inria-serif/InriaSerif-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inria Serif";
+  src: url("/fonts/inria-serif/InriaSerif-BoldItalic.ttf") format("truetype");
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Ingrid Darling", "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+h1 {
+  font-size: clamp(3.5rem, 9vw, 8rem);
+  line-height: 0.9;
+}
+
+h2 {
+  font-size: clamp(2.8rem, 7vw, 6rem);
+  line-height: 0.95;
+}
+
+h3 {
+  font-size: clamp(2.3rem, 5.5vw, 4.8rem);
+  line-height: 1;
+}
+
+h4 {
+  font-size: clamp(2rem, 4.2vw, 3.8rem);
+  line-height: 1.05;
+}
+
+h5 {
+  font-size: clamp(1.7rem, 3.2vw, 3rem);
+  line-height: 1.1;
+}
+
+h6 {
+  font-size: clamp(1.4rem, 2.6vw, 2.4rem);
+  line-height: 1.15;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Inria Serif", Georgia, "Times New Roman", serif;
+}
+
+.chef-portal {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+.chef-portal h1,
+.chef-portal h2,
+.chef-portal h3,
+.chef-portal h4,
+.chef-portal h5,
+.chef-portal h6 {
+  font-family: inherit;
 }
