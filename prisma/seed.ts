@@ -17,13 +17,13 @@ async function main() {
   console.log("Seeding database…");
 
   // Chef account
-  const chefPassword = await bcrypt.hash("chef1234", 12);
+  const chefPassword = await bcrypt.hash("chef123z", 12);
   const chef = await prisma.user.upsert({
-    where: { email: "chef@chefandco.com" },
+    where: { email: "inga@chefinga.com" },
     update: {},
     create: {
-      email: "chef@chefandco.com",
-      name: "Chef Alex",
+      email: "inga@chefinga.com",
+      name: "Inga",
       password: chefPassword,
       role: "CHEF",
     },
