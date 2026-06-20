@@ -2,13 +2,25 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import MealFeedbackCard from "@/components/client/MealFeedbackCard";
+import { redirect } from "next/navigation";
+import { isQuestionnaireCompleteRaw } from "@/lib/client-questionnaire";
 
 export default async function ClientMealsPage() {
   const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect("/login");
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { questionnaireData: true },
+  });
+
+  if (!isQuestionnaireCompleteRaw(user?.questionnaireData ?? null)) {
+    redirect("/client/preferences?required=1");
+  }
 
   const items = await prisma.menuItem.findMany({
     where: {
-      menu: { clientId: session!.user.id },
+      menu: { clientId: session.user.id },
       approved: true,
     },
     include: {

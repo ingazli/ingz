@@ -23,6 +23,22 @@
 }
 
 @font-face {
+  font-family: "Playfair Display";
+  src: url("/fonts/Playfair/Playfair-VariableFont_opsz,wdth,wght.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Playfair Display";
+  src: url("/fonts/Playfair/Playfair-Italic-VariableFont_opsz,wdth,wght.ttf") format("truetype");
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
   font-family: "Inria Serif";
   src: url("/fonts/inria-serif/InriaSerif-Regular.ttf") format("truetype");
   font-style: normal;
@@ -99,6 +115,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: "Inria Serif", Georgia, "Times New Roman", serif;
+  min-height: 100vh;
 }
 
 .chef-portal {
@@ -113,4 +130,42 @@ body {
 .chef-portal h5,
 .chef-portal h6 {
   font-family: inherit;
+}
+
+.chef-portal main h1 {
+  font-size: clamp(1.8rem, 2.6vw, 2.5rem) !important;
+  line-height: 1.05 !important;
+}
+
+.chef-portal main h2 {
+  font-size: clamp(1.4rem, 2.1vw, 2rem) !important;
+  line-height: 1.1 !important;
+}
+
+.chef-portal main h3 {
+  font-size: clamp(1.1rem, 1.6vw, 1.5rem) !important;
+  line-height: 1.15 !important;
+}
+
+.chef-portal main h4 {
+  font-size: clamp(1rem, 1.4vw, 1.2rem) !important;
+  line-height: 1.2 !important;
+}
+
+.chef-portal main h5 {
+  font-size: 0.95rem !important;
+  line-height: 1.2 !important;
+}
+
+.chef-portal main h6 {
+  font-size: 0.875rem !important;
+  line-height: 1.25 !important;
+}
+
+.font-playfair {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+}
+
+.font-ingrid {
+  font-family: "Ingrid Darling", "Times New Roman", serif;
 }

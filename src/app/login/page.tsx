@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -15,27 +15,15 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const result = await signIn("credentials", {
-      email: form.email.toLowerCase(),
-      password: form.password,
-      redirect: false,
-    });
-
-    setLoading(false);
-
-    if (result?.error) {
-      setError("Invalid email or password. Please try again.");
-      return;
-    }
-
-    // Fetch session to determine role and redirect
-    const res = await fetch("/api/auth/session");
-    const session = await res.json();
-    if (session?.user?.role === "CHEF") {
-      router.push("/chef/dashboard");
-    } else {
-      router.push("/client/dashboard");
-    }
+      // Let NextAuth handle the redirect server-side to avoid client race conditions.
+      // Redirect to /auth/redirect which will inspect session and forward accordingly.
+      await signIn("credentials", {
+        email: form.email.toLowerCase(),
+        password: form.password,
+        redirect: true,
+        callbackUrl: "/auth/redirect",
+      });
+      // note: browser will navigate away; no further client-side handling needed here
   }
 
   return (

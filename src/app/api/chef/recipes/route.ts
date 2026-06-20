@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAutoAllergyTags, mergeRecipeTags } from "@/lib/allergy-tags";
+
+const ADD_ON_TYPES = new Set([
+  "JAM",
+  "PICKLE",
+  "SAUCE",
+  "SPREAD",
+  "CONDIMENT",
+  "FERMENT",
+  "DRINK",
+  "DESSERT_SNACK",
+  "PANTRY_STAPLE",
+  "OTHER",
+]);
 
 async function requireChef() {
   const session = await getServerSession(authOptions);
@@ -23,49 +37,81 @@ export async function GET() {
 
 // POST /api/chef/recipes
 export async function POST(req: NextRequest) {
-  const session = await requireChef();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await requireChef();
+    console.log("[api/chef/recipes] POST called. session:", session?.user?.email ?? session?.user?.id ?? session ?? null);
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const {
-    name,
-    tags,
-    cookbookName,
-    recipeLink,
-    pageNumber,
-    prepTime,
-    cookTime,
-    servings,
-    mealType,
-    ingredients,
-  } = body;
+    const body = await req.json();
+    console.log("[api/chef/recipes] body:", JSON.stringify(body));
 
-  if (!name || !mealType) {
-    return NextResponse.json({ error: "Name and meal type are required" }, { status: 400 });
-  }
-
-  const recipe = await prisma.recipe.create({
-    data: {
+    const {
       name,
-      description: null,
-      tags: tags ?? null,
-      cookbookName: cookbookName ?? null,
-      recipeLink: recipeLink ?? null,
-      pageNumber: pageNumber ?? null,
-      prepTime: prepTime ?? null,
-      cookTime: cookTime ?? null,
-      servings: servings ?? null,
+      category,
+      addOnType,
+      tags,
+      cookbookName,
+      recipeLink,
+      pageNumber,
+      prepTime,
+      cookTime,
+      servings,
       mealType,
-      ingredients: {
-        create: (ingredients ?? []).map((i: { name: string; quantity?: string; unit?: string }) => ({
-          name: i.name,
-          quantity: i.quantity ?? null,
-          unit: i.unit ?? null,
-        })),
-      },
-    },
-    include: { ingredients: true },
-  });
+      ingredients,
+    } = body;
 
-  return NextResponse.json(recipe, { status: 201 });
+    if (!name) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+
+    if (category && category !== "MEAL_PLAN" && category !== "ADD_ON") {
+      return NextResponse.json({ error: "Invalid recipe category" }, { status: 400 });
+    }
+
+    if ((category ?? "MEAL_PLAN") === "ADD_ON" && (!addOnType || !ADD_ON_TYPES.has(addOnType))) {
+      return NextResponse.json({ error: "Valid add-on type is required for add-ons" }, { status: 400 });
+    }
+
+    if ((category ?? "MEAL_PLAN") === "MEAL_PLAN" && !mealType) {
+      return NextResponse.json({ error: "Meal type is required for meal plan recipes" }, { status: 400 });
+    }
+
+    const autoTags = getAutoAllergyTags(Array.isArray(ingredients) ? ingredients : []);
+    const mergedTags = mergeRecipeTags(tags, autoTags);
+
+    const recipe = await prisma.recipe.create({
+      data: {
+        name,
+        description: null,
+        category: category ?? "MEAL_PLAN",
+        addOnType: (category ?? "MEAL_PLAN") === "ADD_ON" ? addOnType : null,
+        tags: mergedTags,
+        cookbookName: cookbookName ?? null,
+        recipeLink: recipeLink ?? null,
+        pageNumber: pageNumber ?? null,
+        prepTime: prepTime ?? null,
+        cookTime: cookTime ?? null,
+        servings: servings ?? null,
+        mealType: (category ?? "MEAL_PLAN") === "ADD_ON" ? "SNACK" : mealType,
+        ingredients: {
+          create: (ingredients ?? []).map((i: { name: string; quantity?: string; unit?: string }) => ({
+            name: i.name,
+            quantity: i.quantity ?? null,
+            unit: i.unit ?? null,
+          })),
+        },
+      },
+      include: { ingredients: true },
+    });
+
+    return NextResponse.json(recipe, { status: 201 });
+  } catch (err: any) {
+    console.error("[api/chef/recipes] POST error:", err);
+    const payload: any = { error: "Server error" };
+    if (process.env.NODE_ENV !== "production") {
+      payload.detail = err?.message;
+      payload.stack = err?.stack;
+    }
+    return NextResponse.json(payload, { status: 500 });
+  }
 }

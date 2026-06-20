@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  parseQuestionnaireData,
+  isQuestionnaireComplete,
+  getPortionSizeServings,
+  type QuestionnaireData,
+} from "@/lib/client-questionnaire";
 
 const SPICE_LABEL: Record<number, string> = {
   1: "No spice",
@@ -18,55 +24,46 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json();
+  const questionnaireData = parseQuestionnaireData(JSON.stringify(body));
 
-  const cuisineRatings = body.cuisineRatings as Record<string, number>;
-  const spiceLevel = Number(body.spiceLevel);
-  const allergies = Array.isArray(body.allergies)
-    ? body.allergies.map((a: unknown) => String(a).trim()).filter(Boolean)
-    : [];
-  const otherAllergies = String(body.otherAllergies ?? "").trim();
-  const favoriteFoods = String(body.favoriteFoods ?? "").trim();
-  const avoidFoods = String(body.avoidFoods ?? "").trim();
-
-  if (!cuisineRatings || typeof cuisineRatings !== "object") {
-    return NextResponse.json({ error: "Cuisine ratings are required" }, { status: 400 });
+  if (!isQuestionnaireComplete(questionnaireData)) {
+    return NextResponse.json(
+      { error: "Each household member must have a name, full cuisine ratings, and a spice level" },
+      { status: 400 }
+    );
   }
 
-  if (!Number.isInteger(spiceLevel) || spiceLevel < 1 || spiceLevel > 5) {
-    return NextResponse.json({ error: "Spice level must be between 1 and 5" }, { status: 400 });
-  }
+  const combinedAllergies = questionnaireData.household.flatMap((member) => {
+    const all = [...member.allergies];
+    if (member.otherAllergies) all.push(member.otherAllergies);
+    return all;
+  });
 
-  const combinedAllergies = [...allergies];
-  if (otherAllergies) combinedAllergies.push(otherAllergies);
+  const preferenceSummaryParts = questionnaireData.household.map((member) => {
+    const topLikes = Object.entries(member.cuisineRatings)
+      .filter(([, rating]) => rating >= 4)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name]) => name)
+      .slice(0, 6);
 
-  const topLikes = Object.entries(cuisineRatings)
-    .filter(([, rating]) => rating >= 4)
-    .sort((a, b) => b[1] - a[1])
-    .map(([name]) => name)
-    .slice(0, 6);
+    const personParts = [
+      member.personName,
+      `Portion size: ${member.portionSize} (${getPortionSizeServings(member.portionSize)} serving${getPortionSizeServings(member.portionSize) === 1 ? "" : "s"})`,
+      topLikes.length > 0 ? `Favorite cuisines: ${topLikes.join(", ")}` : null,
+      `Spice: ${SPICE_LABEL[member.spiceLevel] ?? member.spiceLevel}`,
+      member.favoriteFoods ? `Favorite foods: ${member.favoriteFoods}` : null,
+      member.avoidFoods ? `Will not eat: ${member.avoidFoods}` : null,
+    ].filter(Boolean);
 
-  const preferenceSummaryParts = [
-    topLikes.length > 0 ? `Favorite cuisines: ${topLikes.join(", ")}` : null,
-    `Spice: ${SPICE_LABEL[spiceLevel] ?? spiceLevel}`,
-    favoriteFoods ? `Favorite foods: ${favoriteFoods}` : null,
-    avoidFoods ? `Will not eat: ${avoidFoods}` : null,
-  ].filter(Boolean);
-
-  const questionnaireData = {
-    cuisineRatings,
-    spiceLevel,
-    allergies,
-    otherAllergies,
-    favoriteFoods,
-    avoidFoods,
-  };
+    return personParts.join(" | ");
+  });
 
   const updated = await prisma.user.update({
     where: { id: session.user.id },
     data: {
-      allergies: combinedAllergies.length > 0 ? combinedAllergies.join(", ") : null,
+      allergies: combinedAllergies.length > 0 ? Array.from(new Set(combinedAllergies)).join(", ") : null,
       preferences: preferenceSummaryParts.join(" | ") || null,
-      questionnaireData: JSON.stringify(questionnaireData),
+      questionnaireData: JSON.stringify(questionnaireData satisfies QuestionnaireData),
     },
     select: { id: true },
   });

@@ -1,9 +1,16 @@
-import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
 import Link from "next/link";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { calculateRecipeCost } from "@/lib/recipe-pricing";
+import ChefRecipesBrowser from "@/components/chef/ChefRecipesBrowser";
+import { getAutoAllergyTags, mergeRecipeTags } from "@/lib/allergy-tags";
 
 type RecipeListItem = {
   id: string;
   name: string;
+  category: "MEAL_PLAN" | "ADD_ON";
+  addOnType: string | null;
   mealType: string;
   tags: string | null;
   cookbookName: string | null;
@@ -14,6 +21,13 @@ type RecipeListItem = {
   servings: number | null;
   ingredients: { id: string; name: string; quantity: string | null; unit: string | null }[];
   _count: { menuItems: number; feedbacks: number };
+};
+
+type IngredientPriceRow = {
+  ingredientKey: string;
+  packagePrice: number;
+  packageAmount: number;
+  packageUnit: string;
 };
 
 const MEAL_TYPE_LABEL: Record<string, string> = {
@@ -38,16 +52,49 @@ const MEAL_TYPE_LABEL: Record<string, string> = {
   DRINK_NON_ALCOHOLIC: "Drink (Non-Alcoholic)",
 };
 
+const ADD_ON_TYPE_LABEL: Record<string, string> = {
+  JAM: "Jam",
+  PICKLE: "Pickle",
+  SAUCE: "Sauce",
+  SPREAD: "Spread",
+  CONDIMENT: "Condiment",
+  FERMENT: "Ferment",
+  DRINK: "Drink",
+  DESSERT_SNACK: "Dessert / Snack",
+  PANTRY_STAPLE: "Pantry Staple",
+  OTHER: "Other",
+};
+
 export default async function ChefRecipesPage() {
+  const session = await getServerSession(authOptions);
+  const chefId = session?.user?.id;
+
   const recipesRaw = await prisma.recipe.findMany({
     include: { ingredients: true, _count: { select: { menuItems: true, feedbacks: true } } },
     orderBy: { createdAt: "desc" },
   });
+
+  const ingredientPrices = chefId
+    ? await prisma.chefIngredientPrice.findMany({
+        where: { chefId },
+        select: { ingredientKey: true, packagePrice: true, packageAmount: true, packageUnit: true },
+      })
+    : [];
+
+  const ingredientPriceRows: IngredientPriceRow[] = ingredientPrices.map((price) => ({
+    ingredientKey: price.ingredientKey,
+    packagePrice: price.packagePrice,
+    packageAmount: price.packageAmount,
+    packageUnit: price.packageUnit,
+  }));
+
   const recipes: RecipeListItem[] = recipesRaw.map((recipe) => ({
     id: recipe.id,
     name: recipe.name,
+    category: (recipe as { category?: "MEAL_PLAN" | "ADD_ON" }).category ?? "MEAL_PLAN",
+    addOnType: (recipe as { addOnType?: string | null }).addOnType ?? null,
     mealType: recipe.mealType,
-    tags: (recipe as { tags?: string | null }).tags ?? null,
+    tags: mergeRecipeTags((recipe as { tags?: string | null }).tags ?? null, getAutoAllergyTags(recipe.ingredients)),
     cookbookName: (recipe as { cookbookName?: string | null }).cookbookName ?? null,
     pageNumber: (recipe as { pageNumber?: string | null }).pageNumber ?? null,
     recipeLink: (recipe as { recipeLink?: string | null }).recipeLink ?? null,
@@ -68,13 +115,24 @@ export default async function ChefRecipesPage() {
     _avg: { rating: true },
   });
   const ratingMap = Object.fromEntries(avgRatings.map((r) => [r.recipeId, r._avg.rating]));
+  const addOnCount = recipes.filter((recipe) => recipe.category === "ADD_ON").length;
+  const mealPlanCount = recipes.length - addOnCount;
+
+  const recipeCostMap = Object.fromEntries(
+    recipes.map((recipe) => {
+      const pricing = calculateRecipeCost(recipe.ingredients, ingredientPriceRows, recipe.servings ?? 1);
+      return [recipe.id, { estimatedCost: pricing.estimatedCost }];
+    })
+  ) as Record<string, { estimatedCost: number | null }>;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-[#3b2a1a]">Recipes</h1>
-          <p className="text-gray-500 text-sm">{recipes.length} recipes in your library</p>
+          <p className="text-gray-500 text-sm">
+            {recipes.length} items in your library ({mealPlanCount} meal plan, {addOnCount} add-on)
+          </p>
         </div>
         <Link
           href="/chef/recipes/new"
@@ -93,62 +151,7 @@ export default async function ChefRecipesPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {recipes.map((recipe) => (
-            <Link
-              key={recipe.id}
-              href={`/chef/recipes/${recipe.id}`}
-              className="block bg-white rounded-xl border border-gray-200 p-5 hover:border-[#c9a97a] hover:shadow-sm transition-all"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h3 className="font-semibold text-[#3b2a1a]">{recipe.name}</h3>
-                    <span className="text-xs bg-[#faf5ef] text-[#7c5c3a] px-2 py-0.5 rounded-full border border-[#e8ddd0]">
-                      {MEAL_TYPE_LABEL[recipe.mealType] ?? recipe.mealType}
-                    </span>
-                    {ratingMap[recipe.id] && (
-                      <span className="text-xs text-amber-600">
-                        ★ {ratingMap[recipe.id]!.toFixed(1)}
-                      </span>
-                    )}
-                  </div>
-                  {recipe.tags && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {recipe.tags
-                        .split(",")
-                        .map((t: string) => t.trim())
-                        .filter(Boolean)
-                        .map((tag: string) => (
-                          <span
-                            key={`${recipe.id}-${tag}`}
-                            className="text-[11px] bg-[#f6f1ea] text-[#7c5c3a] border border-[#eadfce] px-2 py-0.5 rounded-full"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                    </div>
-                  )}
-                  <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-400">
-                    {recipe.prepTime && <span>Prep {recipe.prepTime} min</span>}
-                    {recipe.cookTime && <span>Cook {recipe.cookTime} min</span>}
-                    {recipe.servings && <span>Serves {recipe.servings}</span>}
-                    <span>{recipe.ingredients.length} ingredients</span>
-                    <span>{recipe._count.menuItems} menus used</span>
-                    {recipe.cookbookName && <span>Book: {recipe.cookbookName}</span>}
-                    {recipe.pageNumber && <span>Page: {recipe.pageNumber}</span>}
-                  </div>
-                  {recipe.recipeLink && (
-                    <p className="text-xs mt-1 text-[#7c5c3a] underline underline-offset-2">
-                      {recipe.recipeLink}
-                    </p>
-                  )}
-                </div>
-                <div className="text-gray-300 shrink-0 text-lg">›</div>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <ChefRecipesBrowser recipes={recipes} ratingMap={ratingMap} recipeCostMap={recipeCostMap} />
       )}
     </div>
   );

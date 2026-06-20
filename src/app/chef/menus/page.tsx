@@ -1,20 +1,103 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { format, endOfWeek } from "date-fns";
+import QuoteMakerPanel from "@/components/chef/QuoteMakerPanel";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export default async function ChefMenusPage() {
-  const menus = await prisma.weeklyMenu.findMany({
-    include: {
-      client: true,
-      items: {
-        include: { recipe: true },
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== "CHEF") {
+    redirect("/login");
+  }
+
+  const [menus, clientsRaw, quotes, recipeCatalogRaw, ingredientPrices] = await Promise.all([
+    prisma.weeklyMenu.findMany({
+      include: {
+        client: true,
+        items: {
+          include: { recipe: true },
+        },
       },
-    },
-    orderBy: { weekStart: "desc" },
-  });
+      orderBy: { weekStart: "desc" },
+    }),
+    prisma.user.findMany({
+      where: { role: "CLIENT" },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.clientQuote.findMany({
+      where: { chefId: session.user.id },
+      include: {
+        client: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+    }),
+    prisma.recipe.findMany({
+      where: { category: "MEAL_PLAN" },
+      select: {
+        id: true,
+        name: true,
+        servings: true,
+        ingredients: {
+          select: {
+            name: true,
+            quantity: true,
+            unit: true,
+          },
+        },
+      },
+      orderBy: { name: "asc" },
+    }),
+    prisma.chefIngredientPrice.findMany({
+      where: { chefId: session.user.id },
+      select: {
+        ingredientKey: true,
+        ingredientName: true,
+        packagePrice: true,
+        packageAmount: true,
+        packageUnit: true,
+      },
+    }),
+  ]);
+
+  const clients = clientsRaw.map((client) => ({
+    id: client.id,
+    name: client.name,
+    email: client.email,
+  }));
+
+  const recipeCatalog = recipeCatalogRaw.map((recipe) => ({
+    id: recipe.id,
+    name: recipe.name,
+    baseServings: recipe.servings ?? 1,
+    ingredientRequirements: recipe.ingredients.map((ing) => ({
+      name: ing.name,
+      quantity: ing.quantity,
+      unit: ing.unit,
+    })),
+  }));
+
+  const quoteItems = quotes.map((quote) => ({
+    id: quote.id,
+    client: quote.client,
+    mealsCount: quote.mealsCount,
+    groceryCost: quote.groceryCost,
+    laborHours: quote.laborHours,
+    laborRate: quote.laborRate,
+    profitPercent: quote.profitPercent,
+    breakEvenCost: quote.breakEvenCost,
+    totalQuote: quote.totalQuote,
+    costPerMeal: quote.costPerMeal,
+    quotePerMeal: quote.quotePerMeal,
+    note: quote.note,
+    createdAt: quote.createdAt.toISOString(),
+  }));
 
   return (
-    <div>
+    <div className="space-y-10">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-[#3b2a1a]">Weekly Menus</h1>
@@ -90,6 +173,28 @@ export default async function ChefMenusPage() {
           })}
         </div>
       )}
+
+      <section>
+        <div className="mb-4">
+          <h2 className="text-2xl font-bold text-[#3b2a1a] mb-1">Client Quotes</h2>
+          <p className="text-gray-500 text-sm">
+            Calculate break-even and profit-based pricing while generating menus.
+          </p>
+        </div>
+
+        <QuoteMakerPanel
+          clients={clients}
+          initialQuotes={quoteItems}
+          recipeCatalog={recipeCatalog}
+          initialIngredientPrices={ingredientPrices.map((row) => ({
+            ingredientKey: row.ingredientKey,
+            ingredientName: row.ingredientName,
+            packagePrice: row.packagePrice,
+            packageAmount: row.packageAmount,
+            packageUnit: row.packageUnit,
+          }))}
+        />
+      </section>
     </div>
   );
 }

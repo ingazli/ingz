@@ -1,17 +1,29 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { format, endOfWeek } from "date-fns";
 import MenuItemResponseCard from "@/components/client/MenuItemResponseCard";
+import { isQuestionnaireCompleteRaw } from "@/lib/client-questionnaire";
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 export default async function ClientMenuPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect("/login");
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { questionnaireData: true },
+  });
+
+  if (!isQuestionnaireCompleteRaw(user?.questionnaireData ?? null)) {
+    redirect("/client/preferences?required=1");
+  }
+
   const menu = await prisma.weeklyMenu.findFirst({
-    where: { id, clientId: session!.user.id },
+    where: { id, clientId: session.user.id },
     include: {
       items: {
         include: {

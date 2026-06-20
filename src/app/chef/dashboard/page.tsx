@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 
 export default async function ChefDashboardPage() {
-  const [clientCount, recipeCount, menuCount, recentFeedbacks] = await Promise.all([
+  const [clientCount, recipeCount, menuCount, recentFeedbacks, addOnRequests] = await Promise.all([
     prisma.user.count({ where: { role: "CLIENT" } }),
     prisma.recipe.count(),
     prisma.weeklyMenu.count(),
@@ -10,6 +10,15 @@ export default async function ChefDashboardPage() {
       take: 5,
       orderBy: { createdAt: "desc" },
       include: { client: true, recipe: true },
+    }),
+    prisma.clientAddOnSelection.findMany({
+      where: { active: true },
+      take: 8,
+      orderBy: { updatedAt: "desc" },
+      include: {
+        client: { select: { id: true, name: true } },
+        recipe: { select: { name: true, addOnType: true } },
+      },
     }),
   ]);
 
@@ -61,7 +70,49 @@ export default async function ChefDashboardPage() {
         </div>
       )}
 
+      {addOnRequests.length > 0 && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-8">
+          <div className="flex items-start justify-between gap-4 mb-3">
+            <div>
+              <p className="font-medium text-emerald-900">
+                {addOnRequests.length} add-on request{addOnRequests.length > 1 ? "s" : ""} awaiting preparation
+              </p>
+              <p className="text-emerald-700 text-sm">Clients have requested add-ons from their add-ons page.</p>
+            </div>
+            <Link href="/chef/clients" className="text-sm text-emerald-700 font-medium hover:underline shrink-0">
+              View Clients →
+            </Link>
+          </div>
+
+          <div className="grid gap-2">
+            {addOnRequests.map((request) => (
+              <Link
+                key={request.id}
+                href={`/chef/clients/${request.client.id}`}
+                className="bg-white border border-emerald-100 rounded-lg px-3 py-2 hover:border-emerald-300 transition-colors"
+              >
+                <p className="text-sm text-[#3b2a1a] font-medium">{request.recipe.name}</p>
+                <p className="text-xs text-gray-600">{request.client.name}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Recent Feedback */}
+      <div className="mb-8">
+        <Link
+          href="/chef/menus"
+          className="block bg-white rounded-xl border border-gray-200 p-5 hover:border-[#c9a97a] hover:shadow-sm transition-all"
+        >
+          <p className="text-sm text-gray-500">Pricing</p>
+          <h2 className="text-lg font-semibold text-[#3b2a1a] mt-1">Menus &amp; Quotes</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Generate menus and calculate break-even, per-meal cost, and profit-adjusted client pricing.
+          </p>
+        </Link>
+      </div>
+
       <div>
         <h2 className="text-lg font-semibold text-[#3b2a1a] mb-4">Recent Client Feedback</h2>
         {recentFeedbacks.length === 0 ? (

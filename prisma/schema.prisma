@@ -36,6 +36,24 @@ enum MealType {
   DRINK_NON_ALCOHOLIC
 }
 
+enum RecipeCategory {
+  MEAL_PLAN
+  ADD_ON
+}
+
+enum AddOnType {
+  JAM
+  PICKLE
+  SAUCE
+  SPREAD
+  CONDIMENT
+  FERMENT
+  DRINK
+  DESSERT_SNACK
+  PANTRY_STAPLE
+  OTHER
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
@@ -48,8 +66,67 @@ model User {
   notes         String?
   weeklyMenus   WeeklyMenu[]
   mealFeedbacks MealFeedback[]
+  addOnSelections ClientAddOnSelection[]
+  clientQuotes ClientQuote[]  @relation("QuoteClient")
+  preparedQuotes ClientQuote[] @relation("QuoteChef")
+  ingredientPrices ChefIngredientPrice[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+}
+
+model ChefIngredientPrice {
+  id            String   @id @default(cuid())
+  chef          User     @relation(fields: [chefId], references: [id], onDelete: Cascade)
+  chefId        String
+  ingredientKey String
+  ingredientName String
+  packagePrice  Float
+  packageAmount Float
+  packageUnit   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([chefId, ingredientKey])
+}
+
+model ClientQuote {
+  id            String   @id @default(cuid())
+  client        User     @relation("QuoteClient", fields: [clientId], references: [id], onDelete: Cascade)
+  clientId      String
+  chef          User     @relation("QuoteChef", fields: [chefId], references: [id], onDelete: Cascade)
+  chefId        String
+  mealsCount    Int
+  groceryCost   Float
+  laborHours    Float
+  laborRate     Float
+  profitPercent Float
+  breakEvenCost Float
+  totalQuote    Float
+  costPerMeal   Float
+  quotePerMeal  Float
+  note          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model ClientRequest {
+  id              String   @id @default(cuid())
+  source          String
+  name            String
+  email           String
+  phone           String?
+  mealsPerDay     String?
+  portionsPerMeal String?
+  allergies       String?
+  dislikes        String?
+  favorites       String?
+  additionalInfo  String?
+  serviceType     String?
+  serviceCount    String?
+  message         String?
+  status          String   @default("NEW")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model Recipe {
@@ -57,6 +134,8 @@ model Recipe {
   name        String
   description String?
   tags        String?
+  category    RecipeCategory @default(MEAL_PLAN)
+  addOnType   AddOnType?
   cookbookName String?
   recipeLink   String?
   pageNumber   String?
@@ -67,8 +146,24 @@ model Recipe {
   ingredients Ingredient[]
   menuItems   MenuItem[]
   feedbacks   MealFeedback[]
+  addOnSelections ClientAddOnSelection[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+}
+
+model ClientAddOnSelection {
+  id        String   @id @default(cuid())
+  client    User     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId  String
+  recipe    Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  recipeId  String
+  active    Boolean  @default(true)
+  preparedMessage String?
+  preparedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, recipeId])
 }
 
 model Ingredient {

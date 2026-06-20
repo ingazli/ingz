@@ -3,7 +3,7 @@ import "./globals.css";
 import Providers from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "Chef & Co. – Personal Chef Meal Prep",
+  title: "Chef Inga – Personal Chef Meal Prep",
   description:
     "Personalized weekly meal prep by your personal chef. Fresh, healthy, and tailored to your tastes.",
 };

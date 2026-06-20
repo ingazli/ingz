@@ -1,6 +1,71 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
+import ClientAddOnRequestsPanel from "@/components/chef/ClientAddOnRequestsPanel";
+import { getPortionSizeServings } from "@/lib/client-questionnaire";
+import DeleteClientButton from "@/components/chef/DeleteClientButton";
+
+type QuestionnaireData = {
+  household?: Array<{
+    personName: string;
+    portionSize: string;
+    allergies: string[];
+    otherAllergies: string;
+    favoriteFoods: string;
+    avoidFoods: string;
+  }>;
+  tryAnything?: boolean;
+  cuisineRatings?: Record<string, number>;
+  spiceLevel?: number;
+  allergies?: string[];
+  otherAllergies?: string;
+  favoriteFoods?: string;
+  avoidFoods?: string;
+};
+
+const SPICE_LABEL: Record<number, string> = {
+  1: "No spice",
+  2: "Mild",
+  3: "Medium",
+  4: "Hot",
+  5: "Flaming",
+};
+
+function parseQuestionnaire(raw: string | null) {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as QuestionnaireData;
+    const household = Array.isArray(parsed.household)
+      ? parsed.household.map((member, index) => ({
+          name: member.personName?.trim() || `Person ${index + 1}`,
+          portionSize: member.portionSize?.trim() || "Standard",
+          portionServings: getPortionSizeServings(member.portionSize?.trim() || "Standard"),
+          allergies: member.allergies ?? [],
+          otherAllergies: member.otherAllergies?.trim() || "",
+          favoriteFoods: member.favoriteFoods?.trim() || "",
+          avoidFoods: member.avoidFoods?.trim() || "",
+        }))
+      : [];
+    const ratings = parsed.cuisineRatings ?? {};
+    const sortedCuisines = Object.entries(ratings)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, rating]) => ({ name, rating }));
+
+    return {
+      household,
+      tryAnything: Boolean(parsed.tryAnything),
+      spice: parsed.spiceLevel ? SPICE_LABEL[parsed.spiceLevel] ?? String(parsed.spiceLevel) : "Not set",
+      topCuisines: sortedCuisines.slice(0, 5),
+      allergies: parsed.allergies ?? [],
+      otherAllergies: parsed.otherAllergies?.trim() || "",
+      favoriteFoods: parsed.favoriteFoods?.trim() || "",
+      avoidFoods: parsed.avoidFoods?.trim() || "",
+    };
+  } catch {
+    return null;
+  }
+}
 
 export default async function ChefClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -23,6 +88,11 @@ export default async function ChefClientDetailPage({ params }: { params: Promise
         include: { recipe: true },
         orderBy: { createdAt: "desc" },
       },
+      addOnSelections: {
+        where: { active: true },
+        include: { recipe: true },
+        orderBy: { updatedAt: "desc" },
+      },
     },
   });
 
@@ -34,6 +104,7 @@ export default async function ChefClientDetailPage({ params }: { params: Promise
     : null;
   const favorites = allFeedbacks.filter((f) => f.favorited).map((f) => f.recipe.name);
   const lowRated = allFeedbacks.filter((f) => f.rating <= 2).map((f) => f.recipe.name);
+  const questionnaire = parseQuestionnaire(client.questionnaireData);
 
   return (
     <div>
@@ -47,6 +118,9 @@ export default async function ChefClientDetailPage({ params }: { params: Promise
           <div className="text-right text-sm text-gray-500">
             {avgRating && <p className="text-amber-600 font-medium">★ {avgRating} avg rating</p>}
             <p>Since {format(new Date(client.createdAt), "MMM yyyy")}</p>
+            <div className="mt-3 flex justify-end gap-2">
+              <DeleteClientButton clientId={client.id} clientName={client.name} />
+            </div>
           </div>
         </div>
 
@@ -82,6 +156,83 @@ export default async function ChefClientDetailPage({ params }: { params: Promise
         </div>
       </div>
 
+      {questionnaire && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+          <h2 className="font-semibold text-[#3b2a1a] mb-3">Questionnaire Summary</h2>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            {questionnaire.household && questionnaire.household.length > 0 && (
+              <div className="sm:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Household</p>
+                <div className="space-y-2">
+                  {questionnaire.household.map((member) => (
+                    <div key={member.name} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                      <p className="font-medium text-[#3b2a1a]">
+                        {member.name} - {member.portionSize} ({member.portionServings} serving{member.portionServings === 1 ? "" : "s"})
+                      </p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {member.allergies.length > 0 ? `Allergies: ${member.allergies.join(", ")}` : "Allergies: none listed"}
+                        {member.otherAllergies ? ` | Other: ${member.otherAllergies}` : ""}
+                      </p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {member.favoriteFoods ? `Likes: ${member.favoriteFoods}` : "Likes: none listed"}
+                        {member.avoidFoods ? ` | Avoids: ${member.avoidFoods}` : ""}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Cuisine Mode</p>
+              <p className="text-gray-700">
+                {questionnaire.tryAnything ? "I will try anything" : "Custom cuisine preferences"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Spice Preference</p>
+              <p className="text-gray-700">{questionnaire.spice}</p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Top Cuisines</p>
+              {questionnaire.topCuisines.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {questionnaire.topCuisines.map((cuisine) => (
+                    <span
+                      key={cuisine.name}
+                      className="text-xs bg-[#faf5ef] text-[#7c5c3a] border border-[#eadfce] px-2 py-1 rounded-full"
+                    >
+                      {cuisine.name} ({cuisine.rating}/5)
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">No cuisines rated yet.</p>
+              )}
+            </div>
+            {(questionnaire.allergies.length > 0 || questionnaire.otherAllergies) && (
+              <div className="sm:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Questionnaire Allergies</p>
+                <p className="text-gray-700">
+                  {[...questionnaire.allergies, questionnaire.otherAllergies].filter(Boolean).join(", ")}
+                </p>
+              </div>
+            )}
+            {questionnaire.favoriteFoods && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Favorite Foods</p>
+                <p className="text-gray-700">{questionnaire.favoriteFoods}</p>
+              </div>
+            )}
+            {questionnaire.avoidFoods && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Will Not Eat</p>
+                <p className="text-gray-700">{questionnaire.avoidFoods}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Favorites & Avoid */}
       {(favorites.length > 0 || lowRated.length > 0) && (
         <div className="grid sm:grid-cols-2 gap-4 mb-6">
@@ -111,6 +262,15 @@ export default async function ChefClientDetailPage({ params }: { params: Promise
           )}
         </div>
       )}
+
+      <ClientAddOnRequestsPanel
+        initialRequests={client.addOnSelections.map((selection) => ({
+          id: selection.id,
+          recipeName: selection.recipe.name,
+          addOnType: (selection.recipe as { addOnType?: string | null }).addOnType ?? "OTHER",
+          requestedAt: selection.updatedAt.toISOString(),
+        }))}
+      />
 
       {/* Menu History */}
       <div>

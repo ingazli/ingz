@@ -7,6 +7,7 @@ import { useState } from "react";
 export default function Navbar() {
   const { data: session } = useSession();
   const [open, setOpen] = useState(false);
+  const contactHref = session?.user.role === "CLIENT" ? "/client/contact" : "/#contact";
 
   return (
     <header className="bg-black text-white shadow-md">
@@ -24,10 +25,10 @@ export default function Navbar() {
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-6 text-sm">
-          <Link href="/#about" className="hover:text-[#c9a97a] transition-colors">
+          <Link href="/about" className="hover:text-[#c9a97a] transition-colors">
             About
           </Link>
-          <Link href="/#contact" className="hover:text-[#c9a97a] transition-colors">
+          <Link href={contactHref} className="hover:text-[#c9a97a] transition-colors">
             Contact
           </Link>
           {!session ? (
@@ -77,7 +78,7 @@ export default function Navbar() {
           <Link href="/#about" onClick={() => setOpen(false)} className="hover:text-[#c9a97a]">
             About
           </Link>
-          <Link href="/#contact" onClick={() => setOpen(false)} className="hover:text-[#c9a97a]">
+          <Link href={contactHref} onClick={() => setOpen(false)} className="hover:text-[#c9a97a]">
             Contact
           </Link>
           {!session ? (

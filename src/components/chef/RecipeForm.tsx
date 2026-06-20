@@ -1,11 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Ingredient = { id?: string; name: string; quantity: string | null; unit: string | null };
 type Recipe = {
   id: string;
   name: string;
+  category: "MEAL_PLAN" | "ADD_ON";
+  addOnType: string | null;
   tags: string | null;
   cookbookName: string | null;
   recipeLink: string | null;
@@ -61,6 +63,32 @@ const MEAL_TYPE_LABEL: Record<string, string> = {
   DRINK_NON_ALCOHOLIC: "Drink (Non-Alcoholic)",
 };
 
+const ADD_ON_TYPES = [
+  "JAM",
+  "PICKLE",
+  "SAUCE",
+  "SPREAD",
+  "CONDIMENT",
+  "FERMENT",
+  "DRINK",
+  "DESSERT_SNACK",
+  "PANTRY_STAPLE",
+  "OTHER",
+];
+
+const ADD_ON_TYPE_LABEL: Record<string, string> = {
+  JAM: "Jam",
+  PICKLE: "Pickle",
+  SAUCE: "Sauce",
+  SPREAD: "Spread",
+  CONDIMENT: "Condiment",
+  FERMENT: "Ferment",
+  DRINK: "Drink",
+  DESSERT_SNACK: "Dessert / Snack",
+  PANTRY_STAPLE: "Pantry Staple",
+  OTHER: "Other",
+};
+
 export default function RecipeForm({
   recipe,
   cookbookNames,
@@ -73,6 +101,7 @@ export default function RecipeForm({
   const isEdit = !!recipe;
 
   const [name, setName] = useState(recipe?.name ?? "");
+  const [category, setCategory] = useState<"MEAL_PLAN" | "ADD_ON">(recipe?.category ?? "MEAL_PLAN");
   const [tags, setTags] = useState(recipe?.tags ?? "");
   const [cookbookName, setCookbookName] = useState(recipe?.cookbookName ?? "");
   const [recipeLink, setRecipeLink] = useState(recipe?.recipeLink ?? "");
@@ -81,12 +110,20 @@ export default function RecipeForm({
   const [cookTime, setCookTime] = useState(recipe?.cookTime?.toString() ?? "");
   const [servings, setServings] = useState(recipe?.servings?.toString() ?? "");
   const [mealType, setMealType] = useState(recipe?.mealType ?? "DINNER");
+  const [addOnType, setAddOnType] = useState(recipe?.addOnType ?? "JAM");
   const [ingredients, setIngredients] = useState<Ingredient[]>(
     recipe?.ingredients?.map((i) => ({ ...i, quantity: i.quantity ?? "", unit: i.unit ?? "" })) ??
       [{ name: "", quantity: "", unit: "" }]
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const classificationLabel = useMemo(() => {
+    if (category === "ADD_ON") {
+      return ADD_ON_TYPE_LABEL[addOnType] ?? addOnType;
+    }
+    return MEAL_TYPE_LABEL[mealType] ?? mealType;
+  }, [category, mealType, addOnType]);
 
   function addIngredient() {
     setIngredients([...ingredients, { name: "", quantity: "", unit: "" }]);
@@ -109,6 +146,8 @@ export default function RecipeForm({
 
     const body = {
       name,
+      category,
+      addOnType: category === "ADD_ON" ? addOnType : null,
       tags: tags || null,
       cookbookName: cookbookName || null,
       recipeLink: recipeLink || null,
@@ -116,7 +155,7 @@ export default function RecipeForm({
       prepTime: prepTime ? parseInt(prepTime) : null,
       cookTime: cookTime ? parseInt(cookTime) : null,
       servings: servings ? parseInt(servings) : null,
-      mealType,
+      mealType: category === "ADD_ON" ? "SNACK" : mealType,
       ingredients: ingredients.filter((i) => i.name.trim()),
     };
 
@@ -152,6 +191,40 @@ export default function RecipeForm({
       {/* Basic info */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
         <h2 className="font-semibold text-[#3b2a1a]">Recipe Details</h2>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Item Category</label>
+          <div className="grid sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setCategory("MEAL_PLAN")}
+              className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                category === "MEAL_PLAN"
+                  ? "bg-[#3b2a1a] text-white border-[#3b2a1a]"
+                  : "bg-white text-gray-700 border-gray-300 hover:border-[#c9a97a]"
+              }`}
+            >
+              <span className="font-medium">Meal Plan Recipe</span>
+              <p className={`mt-1 text-xs ${category === "MEAL_PLAN" ? "text-white/80" : "text-gray-500"}`}>
+                Included in weekly menu generation.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategory("ADD_ON")}
+              className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                category === "ADD_ON"
+                  ? "bg-[#3b2a1a] text-white border-[#3b2a1a]"
+                  : "bg-white text-gray-700 border-gray-300 hover:border-[#c9a97a]"
+              }`}
+            >
+              <span className="font-medium">Client Add-On</span>
+              <p className={`mt-1 text-xs ${category === "ADD_ON" ? "text-white/80" : "text-gray-500"}`}>
+                Browsable by clients and not auto-added to meal plans.
+              </p>
+            </button>
+          </div>
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Recipe Name *</label>
@@ -218,16 +291,31 @@ export default function RecipeForm({
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Meal Type</label>
-            <select
-              value={mealType}
-              onChange={(e) => setMealType(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#c9a97a]"
-            >
-              {MEAL_TYPES.map((t) => (
-                <option key={t} value={t}>{MEAL_TYPE_LABEL[t] ?? t}</option>
-              ))}
-            </select>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {category === "ADD_ON" ? "Add-On Type" : "Meal Type"}
+            </label>
+            {category === "ADD_ON" ? (
+              <select
+                value={addOnType}
+                onChange={(e) => setAddOnType(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#c9a97a]"
+              >
+                {ADD_ON_TYPES.map((type) => (
+                  <option key={type} value={type}>{ADD_ON_TYPE_LABEL[type] ?? type}</option>
+                ))}
+              </select>
+            ) : (
+              <select
+                value={mealType}
+                onChange={(e) => setMealType(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#c9a97a]"
+              >
+                {MEAL_TYPES.map((t) => (
+                  <option key={t} value={t}>{MEAL_TYPE_LABEL[t] ?? t}</option>
+                ))}
+              </select>
+            )}
+            <p className="text-xs text-gray-400 mt-1">Current classification: {classificationLabel}</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Prep (min)</label>

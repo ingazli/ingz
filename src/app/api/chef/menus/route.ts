@@ -21,6 +21,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  const recipeIds = items.map((item: { recipeId: string }) => item.recipeId).filter(Boolean);
+  if (recipeIds.length > 0) {
+    const invalidRecipes = await prisma.recipe.findMany({
+      where: {
+        id: { in: recipeIds },
+        category: "ADD_ON",
+      },
+      select: { id: true, name: true },
+    });
+
+    if (invalidRecipes.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Add-on items cannot be included in weekly meal plans.",
+          invalidRecipes,
+        },
+        { status: 400 }
+      );
+    }
+  }
+
   // Verify the client exists
   const client = await prisma.user.findFirst({ where: { id: clientId, role: "CLIENT" } });
   if (!client) return NextResponse.json({ error: "Client not found" }, { status: 404 });

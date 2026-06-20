@@ -4,8 +4,9 @@ import { usePathname } from "next/navigation";
 
 const links = [
   { href: "/chef/dashboard", label: "Dashboard", icon: "📊" },
+  { href: "/chef/menus", label: "Menus & Quotes", icon: "🧾" },
+  { href: "/chef/requests", label: "Requests", icon: "📨" },
   { href: "/chef/recipes", label: "Recipes", icon: "📋" },
-  { href: "/chef/menus", label: "Menus", icon: "🗓" },
   { href: "/chef/clients", label: "Clients", icon: "👥" },
 ];
 

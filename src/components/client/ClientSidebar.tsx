@@ -3,8 +3,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
-  { href: "/client/dashboard", label: "My Menus", icon: "🗓" },
+  { href: "/client/dashboard", label: "Dashboard", icon: "🗓" },
   { href: "/client/meals", label: "My Meals", icon: "🍽" },
+  { href: "/client/add-ons", label: "Add-Ons", icon: "🫙" },
   { href: "/client/preferences", label: "Questionnaire", icon: "📝" },
 ];
 
